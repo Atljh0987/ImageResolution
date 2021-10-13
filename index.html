@@ -1,0 +1,346 @@
+<!--  
+  "ОПИСАНИЕ"
+  
+  Сделал по приколу такой функционал. Понято, что врятли понадобится разделение больше чем на 4 части, но пофиг.
+  Сделано на композиции двух классов
+  Оверлэп показывает, какое будет перекрытие
+  Копирование при нажатии
+  Возможность встраивать в интерфейс
+  Возможность создавать несколько штук на странице
+  Возможность настраивать
+  Настройки внизу документа
+  Добавлены классы некоторым элементам, можно менять стили при использовании !important  
+
+  (Постестил все настройки, но очень лениво, вроде сильных багов быть не должно)
+
+  Правильность координат потестил, но прям покрытие не делал, косяков быть не должно, формула, как я понял точная
+  Фишка работы в создании основного окна и заполнения его divами с аутлайном.
+  За правильность расположения отвечает рассчитыватель размера каждого элемента и flex вместе с flex-wrap: wrap
+  Стили прописаны внутрь в js во избежании косяков с пересечением с левыми CSS
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style>
+      .info {
+        width: 300px;
+      }
+      .info > h1 {
+        margin-bottom: 15px;
+      }
+
+      .info > div {
+        display: flex;
+        justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h3 id="errAlert"></h3>
+      <div class="root"></div>
+
+      <div class="info">
+        <h1>Настройки</h1>
+        <div>
+          <label for="width">Ширина: </label>
+          <input type="number" id="width" value="6000" />
+        </div>
+        <div>
+          <label for="height">Высота: </label>
+          <input type="number" id="height" value="4000" />
+        </div>
+        <div>
+          <label for="overlap">Наложение: </label>
+          <input type="number" id="overlap" value="100" min="1" />
+        </div>
+        <div>
+          <label for="cols">Столбцы: </label>
+          <input type="number" id="cols" value="2" min="1" />
+        </div>
+        <div>
+          <label for="rows">Строки: </label>
+          <input type="number" id="rows" value="2" min="1" />
+        </div>
+
+        <div>
+          <label for="calculate"></label>
+          <input id="calculate" type="button" value="Рассчитать" />
+        </div>
+      </div>
+    </div>
+  </body>
+  <script>
+    // ************************************** Квадраты с цифрами разрешений **************************************
+    console.clear();
+
+    class Square {
+      constructor(w, h, text, ov, c) {
+        this.el = document.createElement("div");
+        this.el.classList.add("elements");
+        this._init(w, h, text, ov, c);
+        this._sqrInner(text);
+      }
+
+      // Инициализация переменных внутренних квадратов 
+      _init(w, h, text, ov, c) {
+        this.w = w;
+        this.h = h;
+        this.el.style.width = `${this.w}px`;
+        this.el.style.height = `${this.h}px`;
+        this.el.style.display = "flex";
+        // this.el.style.outline = `${ov}px solid ${c}`;
+        // this.el.style.borderRight = `${ov}px solid ${c}`;
+        // this.el.style.borderBottom = `${ov}px solid ${c}`;
+        this.el.style.boxShadow =  `${ov}px 0px 0px 0px ${c},  0px ${ov}px 0px 0px ${c}`
+        
+      }
+
+      //  Инициализация содержимого внутренних элементов 
+      _sqrInner(t) {
+        let sqrInner = document.createElement("div");  // основное окно внутри квадратов
+        sqrInner.style.position = "relative";
+        sqrInner.style.height = "100%";
+        sqrInner.style.width = "100%";
+        sqrInner.style.outline = `1px solid black`;
+        sqrInner.style.zindex = "100";
+        sqrInner.style.display = "flex";
+        sqrInner.style.flexWrap = "wrap";
+        sqrInner.style.flexDirection = "column";
+        sqrInner.style.justifyContent = "center";
+        sqrInner.style.alignItems = "center";
+        sqrInner.style.overflow = 'hidden';
+
+        let text = document.createElement("input");   // инпут с рассчитаными координатами
+        text.classList.add("element_text");
+        text.style.fontSize = "1rem";
+        text.style.width = "100%";
+        text.style.border = "none";
+        text.style.textAlign = "center";
+        text.style.padding = "0";
+        text.style.backgroundColor = "transparent";
+        text.value = t.replace(/\s/g, "");
+
+        let copied = document.createElement("h5");  // надпись "Скопировано"
+        copied.classList.add("copiedAlert");
+        copied.style.margin = "5px";
+        copied.style.width = "60%";
+        copied.style.textAlign = "center";
+        copied.style.cursor = "default";
+
+        sqrInner.onclick = () => {        // Появление/исчезание "скопирования"
+          text.select();
+          document.execCommand("copy"); // устаревшая, но рабочая
+          copied.innerHTML = copied.innerHTML != "" ? "" : "Скопировано";
+        };
+
+        sqrInner.append(text);
+        sqrInner.append(copied);
+        this.el.append(sqrInner);
+      }
+    }
+
+    // ************************************** Основное окно программы **************************************
+
+    class Resolution {
+      constructor(settings) {
+        let def = {     // Дефолтные настройки
+          maxWindowSize: 600,
+          container: ".rectangle",
+          cols: "#cols",
+          rows: "#rows",
+          width: "#width",
+          height: "#height",
+          overlap: "#overlap",
+          calculate: "#calculate",
+          errorMsg: "#errAlert",
+          overlapColor: "lightseagreen",
+        };
+
+        let s = Object.assign(def, settings);
+
+        this.area = document.createElement("div");   // основное окно
+        this.errorMsg = document.querySelector(s.errorMsg);
+        this.overlapColor = s.overlapColor;
+
+        let btn = document.querySelector(s.calculate); // кнопка "Рассчитать"
+        btn.onclick = () => this.reset(s);
+
+        let inputs = [s.cols, s.rows, s.height, s.width, s.overlap]; 
+        document.querySelectorAll(inputs).forEach((e) =>
+          e.addEventListener("keydown", function (e) {  // события на клавиши
+            switch(e.keyCode) {
+              case 13: btn.click(); break;
+              case 107: e.preventDefault() ; break;
+              case 187: e.preventDefault() ; break;
+              case 189: e.preventDefault() ; break;
+              case 109: e.preventDefault() ; break;
+            }
+          })
+        );
+        
+        if(s.selectOnClick) {
+          document.querySelectorAll(inputs).forEach((e) =>    // выделяем текст при клике 
+            e.addEventListener("click", function (e) {
+              this.select();
+            })
+          );
+        }
+
+        this.reset(s); // функция отрисовать/перерисовать
+      }
+
+      // Инициализация основных переменных окна
+
+      _addVariables(ov, w, h, cl, rw, maxS) {
+        this.ov = ov;
+        this.countBoxX = cl;
+        this.countBoxY = rw;
+
+        this.maxS = maxS;
+        this.boxW = Math.floor(w / this.countBoxX);
+        this.boxH = Math.floor(h / this.countBoxY);
+        this.boxWMod = w % this.countBoxX;
+        this.boxHMod = h % this.countBoxY;
+
+        if (w > h) {  // рассчет пропорций размера окна 
+          this.w = this.maxS;
+          this.h = (this.maxS * h) / w;
+        } else {
+          this.w = (this.maxS * w) / h;
+          this.h = this.maxS;
+        }
+
+        this.overlap = ov / (w / this.w); // рассчет размер overlap. "w / this.w" или "h / this.h" - одна фигня
+      }
+
+      // Инициализируем стили (по началу был создан для другого, но переименовывать было лень) 
+
+      _init(container) {
+        this.area.style.display = "flex";
+        this.area.style.flexWrap = "wrap";
+        this.area.style.overflow = "hidden";
+        this.area.style.padding = "-1px";
+        this.area.style.width = `${this.w}px`;
+        this.area.style.height = `${this.h}px`;
+        this.area.style.outline = `1px solid black`;
+        container.append(this.area);
+      }
+
+      // Добавляем квадраты с основной инфой
+
+      _appendBoxes() {
+        let boxWOnPage = this.w / this.countBoxX;
+        let boxHOnPage = this.h / this.countBoxY;
+
+        for (let i = 0; i < this.countBoxY; i++) {
+          for (let j = 0; j < this.countBoxX; j++) {
+
+            // ************** Расчет размеров основных блоков
+            let X = j * this.boxW;
+            let Y = i * this.boxH;
+            let Width = (this.countBoxX == 1)? this.boxW : this.boxW + this.ov;
+            let Height = (this.countBoxY == 1)? this.boxH : this.boxH + this.ov;
+
+            // Расчет размеров крайних правых и нижних блоков
+            if(j >= this.countBoxX - 1) {              
+              Width = (this.countBoxX == 1)? this.boxW : this.boxW + this.boxWMod;
+            }
+            if (i >= this.countBoxY - 1) {
+              Height = (this.countBoxY == 1)? this.boxH : this.boxH + this.boxHMod;
+            }
+
+            let text = `${X}, ${Y}, ${Width}, ${Height}`;
+
+            this.area.append(
+              new Square(boxWOnPage, boxHOnPage, text, this.overlap, this.overlapColor).el
+            );
+          }
+        }
+      }
+
+      // Чекаем ошибки
+
+      _errorCheck(ov, w, h, cl, rw) {
+        if (w / cl < ov || h / rw < ov) {
+          this.errorMsg.innerHTML = "Слишком большое наложение";
+          return false;
+        }
+
+        if (h < 1 || w < 1 || cl < 1 || rw < 1 || ov < 0) {
+          this.errorMsg.innerHTML = "Значения должны быть положительными";
+          return false;
+        }
+
+        if (
+          !Number.isInteger(h) ||
+          !Number.isInteger(w) ||
+          !Number.isInteger(ov) ||
+          !Number.isInteger(cl) ||
+          !Number.isInteger(rw)
+        ) {
+          this.errorMsg.innerHTML = "Допустимы только целые числа";
+          return false;
+        }
+
+        return true;
+      }
+
+      // Очистка основного окна от квадративов для перезаполнения
+
+      clear() {
+        this.area.querySelectorAll("*").forEach((e) => e.remove());
+      }
+
+      // Та самая функция отрисовать/перерисовать
+
+      reset(s) {
+        let ov = Number(document.querySelector(s.overlap).value);
+        let w = Number(document.querySelector(s.width).value);
+        let h = Number(document.querySelector(s.height).value);
+        let cl = Number(document.querySelector(s.cols).value);
+        let rw = Number(document.querySelector(s.rows).value);
+        let cnt = document.querySelector(s.container);
+
+        this.clear();
+
+        if (this._errorCheck(ov, w, h, cl, rw)) {
+          this.errorMsg.innerHTML = "";
+          this._addVariables(ov, w, h, cl, rw, s.maxWindowSize); // рассчет переменны
+          this._init(cnt); // отрисовка
+          this._appendBoxes(); // добавляем элементы
+        }
+      }
+    }
+
+
+    // ************************************** Настройки **************************************
+
+    // Сделано так, что все элементы обязательны, лишних вроде нет
+
+    let settings = {
+      maxWindowSize: 600, // размер основного окна в пикселях (другие юниты прикручивать сильно проблемно)
+      container: ".root", // контейнер, в который будет добавлено основное окно
+      cols: "#cols", // элемент, отвечающий за кол-во столбцов
+      rows: "#rows", // элемент, отвечающий за кол-во строк
+      width: "#width", // элемент, отвечающий за значение ширины
+      height: "#height", // элемент, отвечающий за значение высоты
+      overlap: "#overlap", // элемент, отвечающий за размер нахлеста
+      calculate: "#calculate", // элемент, отвечающий за кнопку "Рассчитать"
+      errorMsg: "#errAlert", // элемент, в который будут выводиться сообщения об ошибках
+
+      selectOnClick: false, // выделять текст при клике
+      overlapColor: "lightseagreen" // цвет перекрытия
+    };
+
+    // ************************************** Объект **************************************
+
+    let ar = new Resolution(settings);
+
+  </script>
+</html>
